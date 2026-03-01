@@ -1,11 +1,11 @@
 /**
  * ResultScreen
  *
- * 会话结束后显示的成绩页面：
- *   - 答对 / 答错 / 总题数
- *   - 比例制星级评定（0–3 星）
- *   - 中文语音总结
- *   - "再来一次" 和 "回主页" 按钮
+ * Score screen shown after the session ends:
+ *   - Correct / wrong / total questions
+ *   - Ratio-based star rating (0–3 stars)
+ *   - Chinese TTS summary
+ *   - "Try again" and "Go home" buttons
  */
 
 import { useEffect } from 'react';

@@ -73,7 +73,7 @@ const ZH_DIGIT: Record<string, number> = {
 function parseZhToken(t: string): number | null {
   if (!t) return null;
 
-  // 百 / 一百
+  // 百 or 一百 — both equal 100
   if (t === '百' || t === '一百') return 100;
 
   // 十 alone
@@ -129,13 +129,21 @@ function findZhNumber(text: string): number | null {
 // ── Main export ───────────────────────────────────────────────────────────
 
 /**
+ * Leading filler sounds a child may utter before a number ("嗯七" → "七").
+ * Applied before all other parsing logic, including the negation check.
+ */
+const FILLER_SOUNDS = /^[嗯呃啊哦哇噢]+\s*/u;
+
+/**
  * Extract the most-likely intended number from a speech transcript.
  * Works with both zh-CN (Chinese characters / Arabic digits) and
  * en-US (English words / Arabic digits) recognition output.
  * Returns null if no valid number can be found.
  */
 export function parseTranscript(transcript: string): number | null {
-  const raw = transcript.trim();
+  const rawInput = transcript.trim();
+  // Strip leading filler sounds before any other processing.
+  const raw = rawInput.replace(FILLER_SOUNDS, '').trim() || rawInput;
 
   // ── Check for negation prefix ────────────────────────────────────────────
   const isNegative =

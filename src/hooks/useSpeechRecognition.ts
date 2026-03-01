@@ -1,37 +1,60 @@
+/**
+ * useSpeechRecognition — low-level always-on continuous recognition hook.
+ *
+ * Design:
+ *  - continuous = true  → recognition stays open across utterances.
+ *  - interimResults = true → interim callbacks fire quickly for short syllables.
+ *  - Recognition does NOT stop after receiving a result; callers own that decision.
+ *  - Streams results via `result` state; callers consume with `clearResult()`.
+ *  - `error` persists until the next `start()` call so callers can see fatal errors.
+ */
+
 import { useState, useRef, useCallback } from 'react';
 
-export type RecognitionState = 'idle' | 'listening' | 'heard' | 'error';
-
-/** Subset of SpeechRecognitionErrorCode values we surface in the UI. */
+/** Subset of SpeechRecognitionErrorCode values surfaced to callers. */
 export type RecognitionError = SpeechRecognitionErrorCode | 'start-failed';
+
+/** One recognition event — may be interim (isFinal=false) or finalised (isFinal=true). */
+export interface RecognitionResult {
+  transcript: string;
+  isFinal: boolean;
+}
 
 function getRecognitionCtor(): SpeechRecognitionConstructor | null {
   if (typeof window === 'undefined') return null;
   return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null;
 }
 
-// Resolved once at module load; null on unsupported browsers.
 const RecognitionCtor = getRecognitionCtor();
 
 export interface UseSpeechRecognitionResult {
   supported: boolean;
-  state: RecognitionState;
-  transcript: string;
+  /** True while a recognition session is open. */
+  active: boolean;
+  /** Latest result (interim or final). Null when nothing pending. */
+  result: RecognitionResult | null;
+  /**
+   * Latest error. NOT cleared by clearResult() — persists so callers can
+   * detect fatal errors (permission denied etc.) across result cycles.
+   */
   error: RecognitionError | null;
   start: () => void;
   stop: () => void;
-  reset: () => void;
+  /** Consume and discard the latest result without touching error state. */
+  clearResult: () => void;
 }
 
 export function useSpeechRecognition(): UseSpeechRecognitionResult {
   const supported = RecognitionCtor !== null;
-  const [state, setState] = useState<RecognitionState>('idle');
-  const [transcript, setTranscript] = useState('');
-  const [error, setError] = useState<RecognitionError | null>(null);
-  const recogRef = useRef<SpeechRecognition | null>(null);
-  const activeRef = useRef(false);
 
-  /** Abort any in-flight recognition instance without changing React state. */
+  const [active, setActive]   = useState(false);
+  const [result, setResult]   = useState<RecognitionResult | null>(null);
+  const [error,  setError]    = useState<RecognitionError | null>(null);
+
+  // Synchronous refs — needed inside callbacks where React state would be stale.
+  const recogRef  = useRef<SpeechRecognition | null>(null);
+  const activeRef = useRef(false); // mirrors `active` for synchronous guard in start()
+
   const abortCurrent = useCallback(() => {
     if (recogRef.current) {
       try { recogRef.current.abort(); } catch { /* already ended */ }
@@ -40,67 +63,65 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     activeRef.current = false;
   }, []);
 
-  /** Stop listening and return to idle (does not clear transcript/error). */
   const stop = useCallback(() => {
     abortCurrent();
-    setState(prev => (prev === 'listening' ? 'idle' : prev));
+    setActive(false);
   }, [abortCurrent]);
 
-  /** Full reset: abort, clear transcript, error, return to idle. */
-  const reset = useCallback(() => {
-    abortCurrent();
-    setState('idle');
-    setTranscript('');
-    setError(null);
-  }, [abortCurrent]);
+  const clearResult = useCallback(() => {
+    // Only clears result — error intentionally survives so callers see fatal errors.
+    setResult(null);
+  }, []);
 
   const start = useCallback(() => {
-    if (!supported || !RecognitionCtor || activeRef.current) return;
-    abortCurrent();
+    if (!supported || !RecognitionCtor) return;
+    // Guard against double-start using the synchronous ref (React state lags by one render).
+    if (recogRef.current || activeRef.current) return;
+
     setError(null);
 
     const recog = new RecognitionCtor();
-    recog.lang = 'zh-CN';
-    recog.interimResults = false;
+    recog.lang            = 'zh-CN';
+    recog.interimResults  = true;  // stream partial results immediately
     recog.maxAlternatives = 3;
-    recog.continuous = true;
+    recog.continuous      = true;  // keep session open across utterances
 
     recog.onstart = () => {
       activeRef.current = true;
-      setState('listening');
+      setActive(true);
     };
 
     recog.onresult = (ev: SpeechRecognitionEvent) => {
-      activeRef.current = false;
-      // Use the most recent (last) result's best alternative.
+      // With continuous=true, ev.results accumulates across utterances.
+      // Always take the latest (last) entry.
       const r = ev.results[ev.results.length - 1];
-      setTranscript(r[0].transcript);
-      setState('heard');
-      // Stop continuous session after first heard result to prevent double-captures.
-      try { recog.stop(); } catch { /* already ended */ }
+      const t = r[0].transcript.trim();
+      if (t) {
+        setResult({ transcript: t, isFinal: r.isFinal });
+      }
     };
 
     recog.onerror = (ev: SpeechRecognitionErrorEvent) => {
-      activeRef.current = false;
+      // onerror fires before onend — set error here, let onend clean up active state.
       setError(ev.error);
-      setState('error');
     };
 
     recog.onend = () => {
       activeRef.current = false;
-      // If we never got a result or error, fall back to idle.
-      setState(prev => (prev === 'listening' ? 'idle' : prev));
+      recogRef.current  = null;
+      setActive(false);
+      // Callers (useAutoListenRecognition) watch `active` and restart as needed.
     };
 
     recogRef.current = recog;
     try {
       recog.start();
     } catch {
-      setState('error');
       setError('start-failed');
+      recogRef.current  = null;
       activeRef.current = false;
     }
   }, [supported, abortCurrent]);
 
-  return { supported, state, transcript, error, start, stop, reset };
+  return { supported, active, result, error, start, stop, clearResult };
 }

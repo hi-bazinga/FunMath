@@ -1,12 +1,14 @@
 /**
- * PracticeScreen（练习界面）
+ * PracticeScreen
  *
- * 两种互斥的答题方式：
- *   🎤 语音 — 自动聆听，无需按钮
- *   ⌨️ 键盘 — 数字键盘 + 确认按钮
+ * Two mutually exclusive input modes:
+ *   🎤 Voice    — auto-listens, no button required
+ *   ⌨️ Keyboard — number pad + confirm button
  *
- * 会话结束（答题数达到 sessionLength）后由 App.tsx 跳转到成绩页面。
- * 此组件负责：不再自动翻页最后一题，等待 App.tsx 计时跳转。
+ * After the session ends (answered questions reaches sessionLength),
+ * App.tsx handles the transition to the results screen.
+ * This component skips auto-advance on the last question and
+ * waits for App.tsx to trigger the timed transition.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -66,15 +68,14 @@ export default function PracticeScreen({
   const prevCorrectRef = useRef(totalCorrect);
   const isVoiceMode    = inputMode === 'voice';
 
-  // 当 stats.attempted 即将达到 sessionLength 时，不再自动翻页
-  // App.tsx 监听 stats.attempted 达到上限后负责跳转
+  // Skip auto-advance on the last question; App.tsx handles the transition
   const isLastQuestion = stats.attempted >= settings.sessionLength - 1;
 
-  // ── 音效 / 语音 hooks ─────────────────────────────────────────────────────
+  // ── Sound / TTS hooks ─────────────────────────────────────────────────────
   const { playCorrect, playWrong, playTick, playSticker } = useSound(soundEnabled);
   const { speak, cancel: cancelSpeech, isSpeaking } = useKidSpeechSynthesis(kidFriendlyVoice);
 
-  // TTS 播报或有反馈时阻止语音识别自动启动
+  // Block auto-start when TTS is speaking or feedback is displayed
   const recognitionBlocked = isSpeaking || feedback !== 'idle';
 
   const {
@@ -91,7 +92,7 @@ export default function PracticeScreen({
     blocked:  recognitionBlocked,
   });
 
-  // ── submitGuess：语音和键盘的共用提交路径 ────────────────────────────────
+  // ── submitGuess: shared submission path for voice and keyboard ────────────
   const submitGuess = useCallback(
     (guess: number) => {
       if (feedback !== 'idle') return;
@@ -121,11 +122,11 @@ export default function PracticeScreen({
     ],
   );
 
-  // 用 ref 保证识别回调中总拿到最新版 submitGuess
+  // Stable ref so the recognition callback always holds the latest submitGuess
   const submitGuessRef = useRef(submitGuess);
   useEffect(() => { submitGuessRef.current = submitGuess; }, [submitGuess]);
 
-  // ── 进入下一题 ────────────────────────────────────────────────────────────
+  // ── Advance to next question ───────────────────────────────────────────────
   const next = useCallback(() => {
     cancelSpeech();
     setVoiceMsg(null);
@@ -135,7 +136,7 @@ export default function PracticeScreen({
     setTimeLeft(10);
   }, [settings, cancelSpeech]);
 
-  // ── 计时器 ────────────────────────────────────────────────────────────────
+  // ── Countdown timer ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!settings.timerEnabled || feedback !== 'idle') return;
     if (timeLeft <= 0) {
@@ -148,28 +149,28 @@ export default function PracticeScreen({
     return () => clearTimeout(id);
   }, [timeLeft, feedback, settings.timerEnabled, problem, onAnswer, playTick]);
 
-  // ── 答对后自动翻页（最后一题除外，由 App.tsx 跳转）────────────────────────
+  // ── Auto-advance after correct answer (skip on last question) ─────────────
   useEffect(() => {
     if (feedback !== 'correct' || isLastQuestion) return;
     const t = setTimeout(next, 1200);
     return () => clearTimeout(t);
   }, [feedback, next, isLastQuestion]);
 
-  // ── 超时后自动翻页（最后一题除外）────────────────────────────────────────
+  // ── Auto-advance after timeout (skip on last question) ────────────────────
   useEffect(() => {
     if (feedback !== 'timeout' || isLastQuestion) return;
     const t = setTimeout(next, 1500);
     return () => clearTimeout(t);
   }, [feedback, next, isLastQuestion]);
 
-  // ── 语音模式：答错后 TTS 播完自动翻页（最后一题除外）─────────────────────
+  // ── Voice mode: auto-advance after wrong + TTS finishes (skip last) ───────
   useEffect(() => {
     if (!isVoiceMode || feedback !== 'wrong' || isSpeaking || isLastQuestion) return;
     const t = setTimeout(next, 900);
     return () => clearTimeout(t);
   }, [isVoiceMode, feedback, isSpeaking, next, isLastQuestion]);
 
-  // ── 贴纸里程碑（每累计答对 10 题）────────────────────────────────────────
+  // ── Sticker milestone (every 10 cumulative correct answers) ───────────────
   useEffect(() => {
     if (
       totalCorrect > 0 &&
@@ -184,7 +185,7 @@ export default function PracticeScreen({
     prevCorrectRef.current = totalCorrect;
   }, [totalCorrect, playSticker]);
 
-  // ── 处理语音识别结果 ──────────────────────────────────────────────────────
+  // ── Handle speech recognition results ─────────────────────────────────────
   useEffect(() => {
     if (voiceState !== 'processing') return;
 
@@ -202,7 +203,7 @@ export default function PracticeScreen({
     resetVoice();
   }, [voiceState, transcript, resetVoice]);
 
-  // ── 识别错误时显示提示 ────────────────────────────────────────────────────
+  // ── Show hint on recognition error ────────────────────────────────────────
   useEffect(() => {
     if (!voiceError || permissionDenied) return;
     const msg =
@@ -213,14 +214,14 @@ export default function PracticeScreen({
     return () => setVoiceMsg(null);
   }, [voiceError, permissionDenied]);
 
-  // ── 麦克风权限被拒时自动切换为键盘模式 ──────────────────────────────────
+  // ── Auto-switch to keyboard mode when mic permission is denied ────────────
   useEffect(() => {
     if (!isVoiceMode || !permissionDenied) return;
     const t = setTimeout(() => onToggleInputMode(), 4000);
     return () => clearTimeout(t);
   }, [isVoiceMode, permissionDenied, onToggleInputMode]);
 
-  // ── 键盘提交 ──────────────────────────────────────────────────────────────
+  // ── Keyboard submit ────────────────────────────────────────────────────────
   function handleSubmit() {
     if (feedback !== 'idle') return;
     const guess = parseInt(input, 10);
@@ -228,17 +229,17 @@ export default function PracticeScreen({
     submitGuess(guess);
   }
 
-  // ── 派生显示数据 ──────────────────────────────────────────────────────────
+  // ── Derived display values ─────────────────────────────────────────────────
   const wrong      = stats.attempted - stats.correct;
   const maxDigits  = MAX_DIGITS_FOR_RANGE[settings.range];
   const allowNeg   = modeInvolvesSubtraction(settings.mode) && !settings.noNegative;
   const timerColor = timeLeft <= 3 ? 'danger' : timeLeft <= 6 ? 'warning' : '';
 
-  // ── 渲染 ──────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="practice">
 
-      {/* ── 贴纸动画 ──────────────────────────────────────── */}
+      {/* ── Sticker animation ─────────────────────────────── */}
       {newSticker && (
         <div className="sticker-overlay">
           <div className="sticker-popup">
@@ -248,11 +249,11 @@ export default function PracticeScreen({
         </div>
       )}
 
-      {/* ── 顶部状态栏 ────────────────────────────────────── */}
+      {/* ── Top status bar ────────────────────────────────── */}
       <div className="top-bar">
         <button className="home-btn" onClick={onHome}>🏠 回家</button>
 
-        {/* 仅显示：答对 / 答错 / 进度，不显示准确率 */}
+        {/* Show only: correct / wrong / progress (no accuracy %) */}
         <div className="stats-bar">
           <span className="stat">✅ 答对：{stats.correct}</span>
           <span className="stat">❌ 答错：{wrong}</span>
@@ -278,7 +279,7 @@ export default function PracticeScreen({
         </div>
       </div>
 
-      {/* ── 计时条 ────────────────────────────────────────── */}
+      {/* ── Timer bar ─────────────────────────────────────── */}
       {settings.timerEnabled && (
         <div className="timer-bar-container">
           <div
@@ -288,7 +289,7 @@ export default function PracticeScreen({
         </div>
       )}
 
-      {/* ── 题目卡片（无连对星星）─────────────────────────── */}
+      {/* ── Problem card (no streak stars) ────────────────── */}
       <div className={`problem-card ${feedback}`}>
         {feedback === 'correct' && (
           <div className="feedback-msg correct-msg">🎉 答对了！</div>
@@ -309,7 +310,7 @@ export default function PracticeScreen({
       </div>
 
       {/* ══════════════════════════════════════════════════════
-          语音模式 — 自动聆听，无需按钮
+          Voice mode — auto-listens, no button required
          ══════════════════════════════════════════════════════ */}
       {isVoiceMode && (
         <div className="voice-section">
@@ -334,7 +335,7 @@ export default function PracticeScreen({
 
           ) : (
             <>
-              {/* 聆听状态动画指示器 */}
+              {/* Listening state animated indicator */}
               <div className={`listen-indicator state-${voiceState}`}>
 
                 {voiceState === 'listening' && (
@@ -369,7 +370,7 @@ export default function PracticeScreen({
                 )}
               </div>
 
-              {/* 暂停 / 继续（家长使用）*/}
+              {/* Pause / resume (for parent use) */}
               {feedback === 'idle' && (
                 <button
                   className="pause-listen-btn"
@@ -385,7 +386,7 @@ export default function PracticeScreen({
       )}
 
       {/* ══════════════════════════════════════════════════════
-          键盘模式 — 数字键盘 + 确认按钮
+          Keyboard mode — number pad + confirm button
          ══════════════════════════════════════════════════════ */}
       {!isVoiceMode && (
         <div className="keyboard-section">
@@ -402,7 +403,7 @@ export default function PracticeScreen({
         </div>
       )}
 
-      {/* 键盘模式答错时显示"下一题"按钮（语音模式自动翻页，最后一题不显示）*/}
+      {/* Show "next question" button when wrong in keyboard mode (voice auto-advances; hidden on last question) */}
       {feedback === 'wrong' && !isVoiceMode && !isLastQuestion && (
         <button className="next-btn" onClick={next}>下一题 →</button>
       )}

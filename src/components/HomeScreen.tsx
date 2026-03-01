@@ -57,7 +57,7 @@ export default function HomeScreen({
         </button>
       </div>
 
-      {/* ── 题目类型 ─────────────────────────────────────── */}
+      {/* ── Problem type ────────────────────────────────────── */}
       <section className="section">
         <h2 className="section-label">题目类型</h2>
         <div className="btn-group">
@@ -74,7 +74,7 @@ export default function HomeScreen({
         </div>
       </section>
 
-      {/* ── 数字范围 ──────────────────────────────────────── */}
+      {/* ── Number range ─────────────────────────────────────── */}
       <section className="section">
         <h2 className="section-label">数字范围（最大）</h2>
         <div className="btn-group">
@@ -102,7 +102,7 @@ export default function HomeScreen({
         </section>
       )}
 
-      {/* ── 每次题数 ─────────────────────────────────────── */}
+      {/* ── Questions per session ───────────────────────────── */}
       <section className="section">
         <h2 className="section-label">每次题数</h2>
         <div className="btn-group">
@@ -118,7 +118,7 @@ export default function HomeScreen({
         </div>
       </section>
 
-      {/* ── 计时器 ───────────────────────────────────────── */}
+      {/* ── Timer ────────────────────────────────────────────── */}
       <section className="section">
         <button
           className={`toggle-btn ${draft.timerEnabled ? 'active' : ''}`}
@@ -129,7 +129,7 @@ export default function HomeScreen({
         </button>
       </section>
 
-      {/* ── 答题方式 ─────────────────────────────────────── */}
+      {/* ── Input mode ───────────────────────────────────────── */}
       <section className="section">
         <h2 className="section-label">答题方式</h2>
         <div className="btn-group">
@@ -155,7 +155,7 @@ export default function HomeScreen({
         )}
       </section>
 
-      {/* ── 语音反馈 ─────────────────────────────────────── */}
+      {/* ── Voice feedback ───────────────────────────────────── */}
       <section className="section">
         <h2 className="section-label">语音反馈</h2>
         <div className="toggle-stack">
