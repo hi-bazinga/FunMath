@@ -1,0 +1,53 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --clr-bg: #fff8f0;
+  --clr-text: #1a1a2e;
+  --clr-primary: #ff6b35;
+  --clr-primary-dark: #e05520;
+  --clr-success: #2ec44a;
+  --clr-success-dark: #239938;
+  --clr-danger: #e63946;
+  --clr-muted: #6b7280;
+  --clr-card: #ffffff;
+  --clr-active: #ffd166;
+  --radius: 20px;
+  --shadow: 0 4px 0 rgba(0,0,0,.15);
+}
+
+body {
+  font-family: 'Nunito', 'Rounded Mplus 1c', system-ui, sans-serif;
+  background: var(--clr-bg);
+  color: var(--clr-text);
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#root {
+  width: 100%;
+  max-width: 480px;
+  padding: 1rem;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: var(--radius);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  transition: transform .1s, box-shadow .1s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:active {
+  transform: translateY(3px);
+  box-shadow: none !important;
+}
